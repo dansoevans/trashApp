@@ -1,70 +1,42 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
 
-export default function WelcomeScreen() {
+// app/index.tsx
+import React from "react";
+import { View, Text, TouchableOpacity, ImageBackground, StyleSheet, SafeAreaView } from "react-native";
+import { useRouter } from "expo-router";
+import { useTheme } from "../theme/ThemeContext";
+import { APP_NAME } from "../constants";
+
+export default function Welcome() {
   const router = useRouter();
+  const theme = useTheme();
 
   return (
-    <View style={styles.container}>
-      <Image
-        source={{
-          uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuAdKVu1sBAa4Y3fyZFvrdmlHLiKMQzPr3Gt1GGqpDJ0OHBCPLWp79qpsLcb6ZDTnOfvSxIqgBJWprRN4Vgtn237BybuOGgKtmIM8OgbbjtS1fqzwXmUXi7tyJK0x7TNpsfo83rD_kJmQwS0xlLeAkZWn7jeIm8PF8UrNCTAxfc4UHoOvPBBhvURzXkZk4VvcK9PUxVjEvQ5kWX4nHngbLFNmDxGcWOeXFuRCvbbJbyw1o_Ujzhhdcy7guCI9A9ZteZZqhp7NghMnh7O",
-        }}
-        style={styles.headerImage}
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <ImageBackground
+        source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuAdKVu1sBAa4Y3fyZFvrdmlHLiKMQzPr3Gt1GGqpDJ0OHBCPLWp79qpsLcb6ZDTnOfvSxIqgBJWprRN4Vgtn237BybuOGgKtmIM8OgbbjtS1fqzwXmUXi7tyJK0x7TNpsfo83rD_kJmQwS0xlLeAkZWn7jeIm8PF8UrNCTAxfc4UHoOvPBBhvURzXkZk4VvcK9PUxVjEvQ5kWX4nHngbLFNmDxGcWOeXFuRCvbbJbyw1o_Ujzhhdcy7guCI9A9ZteZZqhp7NghMnh7O" }}
+        style={styles.hero}
+        resizeMode="cover"
       />
-      <Text style={styles.title}>Welcome to TrashAway</Text>
-      <Text style={styles.subtitle}>
-        Request garbage collection services with ease. Pricing is based on
-        weight, ensuring fair and transparent costs.
-      </Text>
+      <View style={styles.body}>
+        <Text style={[styles.title, { color: theme.text }]}>{APP_NAME}</Text>
+        <Text style={[styles.desc, { color: theme.muted }]}>
+          Request garbage collection with fair pricing. Quick, reliable pickups.
+        </Text>
 
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/request")}
-      >
-        <Text style={styles.buttonText}>Get Started</Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity style={[styles.cta, { backgroundColor: theme.primary }]} onPress={() => router.push("/estimation")}>
+          <Text style={[styles.ctaText]}>Get Started</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f6f8f6",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  headerImage: {
-    width: "100%",
-    height: 250,
-    borderRadius: 12,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#111811",
-    marginTop: 24,
-    textAlign: "center",
-  },
-  subtitle: {
-    textAlign: "center",
-    marginVertical: 12,
-    color: "#333",
-  },
-  button: {
-    backgroundColor: "#17cf17",
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 8,
-    marginTop: 30,
-    width: "100%",
-  },
-  buttonText: {
-    textAlign: "center",
-    color: "#112111",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
+  safe: { flex: 1 },
+  hero: { height: 260, width: "100%" },
+  body: { flex: 1, padding: 20, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 32, fontFamily: "WorkSans_700Bold", marginBottom: 8 },
+  desc: { fontSize: 15, textAlign: "center", maxWidth: 560, marginBottom: 20 },
+  cta: { paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12 },
+  ctaText: { color: "black", fontWeight: "700" },
 });
