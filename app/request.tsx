@@ -1,214 +1,307 @@
-// app/request.tsx
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
-  Alert,
+  KeyboardAvoidingView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Calendar } from "react-native-calendars";
+import { useRouter } from "expo-router";
+import { collection, addDoc, query, where, getDocs, Timestamp } from "firebase/firestore";
 import * as Location from "expo-location";
-import MapView, { Marker } from "react-native-maps";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { useTheme } from "../theme/ThemeContext";
-import { sendAutoSMS } from "../utils/sms";
-import { COLLECTOR_NUMBER } from "../constants";
+import { db } from "../Firebase/firebaseConfig";
 
 export default function RequestScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const theme = useTheme();
-
-  const estimated = (params as any).estimated as string | undefined;
-
-  // form state
+  const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
-  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [wasteType, setWasteType] = useState("");
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
 
-  // location loading
-  const [locLoading, setLocLoading] = useState(false);
+  // Generate time slots from 10 AM to 8 PM (1-hour intervals)
+  const timeSlots = Array.from({ length: 11 }, (_, i) => {
+    const hour = 10 + i;
+    const label =
+      hour <= 12
+        ? `${hour}:00 AM`
+        : `${hour - 12}:00 PM`;
+    return label;
+  });
 
-  // date + slots
-  const [date, setDate] = useState<Date>(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const baseSlots = ["10:00", "11:00", "12:00", "14:00", "15:00", "16:00"];
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  // Restrict past dates
+  const today = new Date().toISOString().split("T")[0];
 
-  // sending state
-  const [sending, setSending] = useState(false);
+  // Fetch booked times for the selected date
+  useEffect(() => {
+    const fetchBookedTimes = async () => {
+      if (!selectedDate) return;
+      try {
+        const q = query(collection(db, "requests"), where("date", "==", selectedDate));
+        const snapshot = await getDocs(q);
+        const times = snapshot.docs.map((doc) => doc.data().time);
+        setBookedTimes(times);
+      } catch (error) {
+        console.error("Error fetching booked times:", error);
+      }
+    };
+    fetchBookedTimes();
+  }, [selectedDate]);
 
-  // generate slots (exclude past slots if same day with 30 min buffer)
-  const getAvailableSlots = useCallback(
-    (forDate: Date) => {
-      const now = new Date();
-      const isToday = now.toDateString() === forDate.toDateString();
-      if (!isToday) return baseSlots;
-      const threshold = new Date(now.getTime() + 30 * 60 * 1000);
-      return baseSlots.filter((t) => {
-        const [hh, mm] = t.split(":").map(Number);
-        const c = new Date(forDate);
-        c.setHours(hh, mm, 0, 0);
-        return c > threshold;
-      });
-    },
-    [baseSlots]
-  );
-
-  const availableSlots = getAvailableSlots(date);
-
-  // use device location and reverse geocode
-  const handleUseLocation = async () => {
+  const handleGetLocation = async () => {
     try {
-      setLocLoading(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      setGettingLocation(true);
+      let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission denied", "Please allow location access in settings.");
-        setLocLoading(false);
+        Alert.alert("Permission denied", "Location permission is required.");
+        setGettingLocation(false);
         return;
       }
 
-      const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = cur.coords;
-      setCoords({ latitude, longitude });
-
-      const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
-      const readable = [place.name, place.street, place.city, place.region, place.postalCode, place.country]
-        .filter(Boolean)
-        .join(", ");
-      setAddress(readable);
-    } catch (err) {
-      console.warn(err);
-      Alert.alert("Location error", "Could not fetch location. Try again.");
-    } finally {
-      setLocLoading(false);
-    }
-  };
-
-  // when marker dragged we update address
-  const onMarkerDragEnd = async (e: any) => {
-    const { latitude, longitude } = e.nativeEvent.coordinate;
-    setCoords({ latitude, longitude });
-    try {
-      const [p] = await Location.reverseGeocodeAsync({ latitude, longitude });
-      const readable = [p.name, p.street, p.city, p.region, p.postalCode, p.country].filter(Boolean).join(", ");
-      setAddress(readable);
-    } catch (err) {
-      console.warn("reverse geocode failed", err);
-    }
-  };
-
-  const onDateChange = (_: any, selected?: Date) => {
-    setShowDatePicker(Platform.OS === "ios");
-    if (selected) {
-      const newD = new Date(selected);
-      newD.setHours(0, 0, 0, 0);
-      setDate(newD);
-      setSelectedSlot(null);
-    }
-  };
-
-  const handleContinue = async () => {
-    if (!address.trim()) return Alert.alert("Missing address", "Please supply an address or use 'Use My Location'.");
-    if (!phone.trim()) return Alert.alert("Missing phone", "Please enter a phone number.");
-    if (!selectedSlot) return Alert.alert("Pick time", "Select a time slot.");
-
-    // compose pickup datetime
-    const [hh, mm] = selectedSlot.split(":").map(Number);
-    const pickup = new Date(date);
-    pickup.setHours(hh, mm, 0, 0);
-
-    if (pickup.getTime() <= Date.now()) return Alert.alert("Invalid time", "Choose a future time.");
-
-    const userMessage = `TrashAway pickup confirmed\nAddress: ${address}\nPickup: ${pickup.toLocaleString()}\nEstimated cost: ${estimated || "TBD"}`;
-
-    try {
-      setSending(true);
-
-      // send to user automatically (platform-dependent)
-      const resUser = await sendAutoSMS(phone, userMessage);
-
-      // also notify collector
-      const collectorMessage = `New pickup request\nAddress: ${address}\nPickup: ${pickup.toLocaleString()}\nPhone: ${phone}`;
-      const resCollector = await sendAutoSMS(COLLECTOR_NUMBER, collectorMessage);
-
-      // navigate to confirmation with summary params
-      router.push({
-        pathname: "/confirmation",
-        params: {
-          address,
-          phone,
-          pickupAt: pickup.toISOString(),
-          estimated: estimated || "TBD",
-          smsUser: resUser.result ?? "unknown",
-          smsCollector: resCollector.result ?? "unknown",
-        },
+      const loc = await Location.getCurrentPositionAsync({});
+      const geo = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
       });
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "Failed to send SMS. Please try again or check your device settings.");
+
+      const place = geo[0];
+      const formattedAddress = `${place.name || ""}, ${place.city || ""}, ${place.region || ""}, ${place.country || ""}`;
+      setAddress(formattedAddress);
+    } catch (error) {
+      console.error("Location Error:", error);
+      Alert.alert("Error", "Unable to fetch location.");
     } finally {
-      setSending(false);
+      setGettingLocation(false);
+    }
+  };
+
+  const handleConfirmRequest = async () => {
+    if (!name || !address || !phone || !wasteType || !selectedDate || !selectedTime) {
+      Alert.alert("Missing Fields", "Please fill in all required details.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Ensure time slot is still available
+      const q = query(
+        collection(db, "requests"),
+        where("date", "==", selectedDate),
+        where("time", "==", selectedTime)
+      );
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        setLoading(false);
+        Alert.alert("Time Unavailable", "This time slot has just been booked. Please choose another.");
+        return;
+      }
+
+      await addDoc(collection(db, "requests"), {
+        name,
+        address,
+        phone,
+        wasteType,
+        date: selectedDate,
+        time: selectedTime,
+        status: "Pending",
+        createdAt: Timestamp.now(),
+      });
+
+      setLoading(false);
+      Alert.alert("Success", "Your garbage collection request has been submitted.");
+      router.push("/confirmation");
+    } catch (error) {
+      console.error("Error adding document: ", error);
+      setLoading(false);
+      Alert.alert("Error", "Something went wrong while submitting your request.");
     }
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <Text style={[styles.title, { color: theme.text }]}>Request Pickup</Text>
-          <Text style={[styles.subtitle, { color: theme.muted }]}>Fill details, choose date & time — we’ll notify you</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0e1111" }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 20 }} showsVerticalScrollIndicator={false}>
+          <Text
+            style={{
+              color: "#00e060",
+              fontSize: 26,
+              fontWeight: "600",
+              textAlign: "center",
+              marginVertical: 10,
+            }}
+          >
+            Garbage Collection Request
+          </Text>
 
-          <Text style={[styles.label, { color: theme.text }]}>Pickup Address</Text>
-          <TextInput style={[styles.input, { backgroundColor: theme.card, color: theme.text }]} value={address} onChangeText={setAddress} multiline />
+          {/* Name */}
+          <TextInput
+            style={styles.input}
+            placeholder="Full Name"
+            placeholderTextColor="#999"
+            value={name}
+            onChangeText={setName}
+          />
 
-          <View style={styles.row}>
-            <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: theme.primary }]} onPress={handleUseLocation} disabled={locLoading}>
-              {locLoading ? <ActivityIndicator color="#000" /> : <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Use My Location</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: theme.card }]} onPress={() => { setAddress(""); setCoords(null); }}>
-              <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Clear</Text>
+          {/* Address */}
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="Address"
+              placeholderTextColor="#999"
+              value={address}
+              onChangeText={setAddress}
+            />
+            <TouchableOpacity
+              onPress={handleGetLocation}
+              style={{
+                marginLeft: 8,
+                backgroundColor: "#00e060",
+                borderRadius: 10,
+                padding: 10,
+              }}
+            >
+              {gettingLocation ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={{ color: "#fff", fontWeight: "600" }}>📍</Text>
+              )}
             </TouchableOpacity>
           </View>
 
-          {coords && (
-            <View style={styles.mapContainer}>
-              <MapView style={styles.map} initialRegion={{ latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }}>
-                <Marker draggable coordinate={coords} onDragEnd={onMarkerDragEnd} title="Pickup location" description={address} />
-              </MapView>
+          {/* Phone */}
+          <TextInput
+            style={styles.input}
+            placeholder="Phone Number"
+            placeholderTextColor="#999"
+            keyboardType="phone-pad"
+            value={phone}
+            onChangeText={setPhone}
+          />
+
+          {/* Waste Type */}
+          <TextInput
+            style={styles.input}
+            placeholder="Type of Waste (Household, Plastic, etc.)"
+            placeholderTextColor="#999"
+            value={wasteType}
+            onChangeText={setWasteType}
+          />
+
+          {/* Calendar */}
+          <View style={{ marginTop: 10, backgroundColor: "#1a1a1a", borderRadius: 12, padding: 10 }}>
+            <Text style={{ color: "#ccc", marginBottom: 6, fontSize: 16 }}>
+              Select Pickup Date:
+            </Text>
+            <Calendar
+              theme={{
+                calendarBackground: "#1a1a1a",
+                dayTextColor: "#fff",
+                monthTextColor: "#00e060",
+                arrowColor: "#00e060",
+                todayTextColor: "#00e060",
+                selectedDayBackgroundColor: "#00e060",
+              }}
+              minDate={today}
+              onDayPress={(day) => {
+                setSelectedDate(day.dateString);
+                setSelectedTime(""); // reset time when new date selected
+              }}
+              markedDates={
+                selectedDate
+                  ? { [selectedDate]: { selected: true, selectedColor: "#00e060" } }
+                  : {}
+              }
+            />
+          </View>
+
+          {/* Time Selection */}
+          {selectedDate ? (
+            <View style={{ marginTop: 20 }}>
+              <Text style={{ color: "#ccc", marginBottom: 8, fontSize: 16 }}>
+                Select Time Slot:
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                {timeSlots.map((slot) => {
+                  const isBooked = bookedTimes.includes(slot);
+                  const isSelected = selectedTime === slot;
+                  return (
+                    <View key={slot} style={{ alignItems: "center", margin: 5 }}>
+                      <TouchableOpacity
+                        onPress={() => !isBooked && setSelectedTime(slot)}
+                        disabled={isBooked}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 15,
+                          backgroundColor: isBooked
+                            ? "#2a0000"
+                            : isSelected
+                            ? "#00e060"
+                            : "#1a1a1a",
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: isSelected ? "#00e060" : "#333",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: isBooked ? "#ff6666" : isSelected ? "#fff" : "#ccc",
+                            fontWeight: isSelected ? "700" : "500",
+                          }}
+                        >
+                          {slot}
+                        </Text>
+                      </TouchableOpacity>
+                      {isBooked && (
+                        <Text style={{ color: "#ff4d4d", fontSize: 12, marginTop: 2 }}>
+                          Booked
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          )}
+          ) : null}
 
-          <Text style={[styles.label, { color: theme.text }]}>Mobile Number</Text>
-          <TextInput style={[styles.input, { backgroundColor: theme.card, color: theme.text }]} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+233..." />
-
-          <Text style={[styles.label, { color: theme.text }]}>Pickup Date</Text>
-          <TouchableOpacity style={[styles.datePickerBtn, { backgroundColor: theme.card }]} onPress={() => setShowDatePicker(true)}>
-            <Text style={{ color: theme.text }}>{date.toDateString()}</Text>
-          </TouchableOpacity>
-          {showDatePicker && <DateTimePicker value={date} mode="date" display={Platform.OS === "ios" ? "inline" : "default"} minimumDate={new Date()} onChange={onDateChange} />}
-
-          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Available Time Slots</Text>
-          <View style={styles.slotsContainer}>
-            {availableSlots.length === 0 ? <Text style={{ color: theme.muted }}>No available slots for this day</Text> : availableSlots.map((slot) => {
-              const active = slot === selectedSlot;
-              return (
-                <TouchableOpacity key={slot} onPress={() => setSelectedSlot(slot)} style={[styles.slot, { backgroundColor: active ? theme.primary : theme.card }]}>
-                  <Text style={{ color: active ? theme.card : theme.text }}>{slot}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <TouchableOpacity style={[styles.cta, { backgroundColor: theme.primary }]} onPress={handleContinue} disabled={sending}>
-            {sending ? <ActivityIndicator color="#000" /> : <Text style={[styles.ctaText, { color: theme.text }]}>Continue</Text>}
+          {/* Submit Button */}
+          <TouchableOpacity
+            onPress={handleConfirmRequest}
+            disabled={loading}
+            style={{
+              backgroundColor: loading ? "#222" : "#00e060",
+              padding: 15,
+              borderRadius: 12,
+              marginTop: 25,
+              alignItems: "center",
+              shadowColor: "#00e060",
+              shadowOpacity: 0.4,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 2 },
+            }}
+          >
+            <Text
+              style={{
+                color: "#fff",
+                fontSize: 18,
+                fontWeight: "600",
+              }}
+            >
+              {loading ? "Submitting..." : "Continue"}
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -216,21 +309,14 @@ export default function RequestScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  container: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 6 },
-  subtitle: { marginBottom: 14 },
-  label: { fontWeight: "600", marginBottom: 6 },
-  input: { padding: 12, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: "rgba(0,0,0,0.06)" },
-  row: { flexDirection: "row", gap: 8, marginBottom: 12, justifyContent: "space-between" },
-  secondaryButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: "center", marginRight: 8 },
-  secondaryButtonText: { fontWeight: "700" },
-  mapContainer: { height: 180, borderRadius: 12, overflow: "hidden", marginBottom: 12 },
-  map: { width: "100%", height: "100%" },
-  datePickerBtn: { padding: 12, borderRadius: 10, marginTop: 6, marginBottom: 8 },
-  slotsContainer: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  slot: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginRight: 8, marginBottom: 8 },
-  cta: { paddingVertical: 14, borderRadius: 12, marginTop: 18, alignItems: "center" },
-  ctaText: { fontWeight: "700" },
-});
+const styles = {
+  input: {
+    backgroundColor: "#1a1a1a",
+    color: "#fff",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+};

@@ -23,7 +23,7 @@ export default function Welcome() {
           Request garbage collection with fair pricing. Quick, reliable pickups.
         </Text>
 
-        <TouchableOpacity style={[styles.cta, { backgroundColor: theme.primary }]} onPress={() => router.push("/estimation")}>
+        <TouchableOpacity style={[styles.cta, { backgroundColor: theme.primary }]} onPress={() => router.push("./auth/signup")}>
           <Text style={[styles.ctaText]}>Get Started</Text>
         </TouchableOpacity>
       </View>

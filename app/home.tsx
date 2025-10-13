@@ -1,60 +1,130 @@
-// app/home.tsx
-import React from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
-import useRequests from "../hooks/useRequests";
+import React, { useEffect, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { useNavigation } from "@react-navigation/native";
 
-export default function Home() {
-  const router = useRouter();
-  const { requests, loading, removeRequest } = useRequests();
+export default function HomeScreen() {
+  const navigation = useNavigation();
+  const auth = getAuth();
+  const [userName, setUserName] = useState("User");
+  const fadeAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.email) {
+        const name = user.email.split("@")[0];
+        setUserName(name.charAt(0).toUpperCase() + name.slice(1));
+      }
+    });
+
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+
+    return unsubscribe;
+  }, []);
+
+  const features = [
+    {
+      title: "Request Pickup",
+      icon: "trash-outline",
+      color: "#00c26e",
+      onPress: () => navigation.navigate("Request" as never),
+    },
+    {
+      title: "My Requests",
+      icon: "time-outline",
+      color: "#008f52",
+      onPress: () => navigation.navigate("History" as never),
+    },
+    {
+      title: "Booking Calendar",
+      icon: "calendar-outline",
+      color: "#00b36e",
+      onPress: () => navigation.navigate("Request" as never),
+    },
+    {
+      title: "Account Settings",
+      icon: "person-outline",
+      color: "#00693c",
+      onPress: () => navigation.navigate("Account" as never),
+    },
+  ];
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>TrashAway</Text>
-      <View style={styles.body}>
-        <TouchableOpacity style={styles.requestButton} onPress={() => router.push("/request")}>
-          <Text style={styles.requestButtonText}>Request Pickup</Text>
-        </TouchableOpacity>
+      <Animated.View style={[styles.headerContainer, { opacity: fadeAnim }]}>
+        <Text style={styles.headerText}>Welcome,</Text>
+        <Text style={styles.username}>{userName} 👋</Text>
+      </Animated.View>
 
-        <Text style={styles.sectionTitle}>Your Requests</Text>
-        {loading ? (
-          <Text>Loading...</Text>
-        ) : requests.length === 0 ? (
-          <Text style={styles.emptyText}>No requests yet. Tap "Request Pickup" to create one.</Text>
-        ) : (
-          <FlatList
-            data={requests}
-            keyExtractor={(i) => i.id}
-            renderItem={({ item }) => (
-              <View style={styles.card}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{item.type} • {item.weight} kg</Text>
-                  <Text style={styles.cardSubtitle}>{item.address}</Text>
-                  <Text style={styles.cardSubtitle}>Pickup: {new Date(item.pickupAt).toLocaleString()}</Text>
-                  <Text style={[styles.cardSubtitle, { marginTop: 6 }]}>Status: {item.status}</Text>
-                </View>
-                <TouchableOpacity style={styles.removeBtn} onPress={() => removeRequest(item.id)}>
-                  <Text style={{ color: "#fff" }}>Remove</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
-        )}
-      </View>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        {features.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[styles.card, { borderColor: item.color }]}
+            activeOpacity={0.8}
+            onPress={item.onPress}
+          >
+            <Ionicons name={item.icon as any} size={32} color={item.color} />
+            <Text style={styles.cardTitle}>{item.title}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  header: { fontSize: 28, fontWeight: "800", paddingTop: 48, paddingHorizontal: 20 },
-  body: { padding: 20, flex: 1 },
-  requestButton: { backgroundColor: "#17cf17", padding: 14, borderRadius: 10, alignItems: "center", marginBottom: 16 },
-  requestButtonText: { color: "#0f1a0f", fontWeight: "700" },
-  sectionTitle: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
-  emptyText: { color: "#666" },
-  card: { flexDirection: "row", backgroundColor: "#f3f6f3", padding: 12, borderRadius: 10, marginBottom: 12, alignItems: "center" },
-  cardTitle: { fontWeight: "700" },
-  cardSubtitle: { color: "#444", fontSize: 13, marginTop: 2 },
-  removeBtn: { backgroundColor: "#ff4d4d", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingTop: 60,
+  },
+  headerContainer: {
+    marginBottom: 20,
+  },
+  headerText: {
+    fontSize: 22,
+    color: "#333",
+    fontWeight: "500",
+  },
+  username: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#00b26f",
+    marginTop: 4,
+  },
+  scrollContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingBottom: 40,
+  },
+  card: {
+    width: "47%",
+    backgroundColor: "#f9f9f9",
+    borderRadius: 20,
+    paddingVertical: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    borderWidth: 2,
+    shadowColor: "#00b26f",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardTitle: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    textAlign: "center",
+  },
 });
