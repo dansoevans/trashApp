@@ -1,40 +1,70 @@
 // services/requestService.ts
-import { db } from "../Firebase/firebaseConfig";
-import { collection, addDoc, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { db } from "@/Firebase/firebaseConfig";
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
 
-const requestsRef = collection(db, "requests");
-
-export const getBookedTimes = async (date: string) => {
-  const q = query(requestsRef, where("date", "==", date));
-  const snapshot = await getDocs(q);
-  const bookedTimes = snapshot.docs.map((doc) => doc.data().time);
-  return bookedTimes;
-};
-
-export const submitRequest = async (data: {
-  name: string;
+export interface RequestData {
+  userId: string;
+  userName: string;
+  address: string;
   phone: string;
   wasteType: string;
-  address: string;
-  date: string;
-  time: string;
-}) => {
-  // Check if selected slot already exists
-  const q = query(
-    requestsRef,
-    where("date", "==", data.date),
-    where("time", "==", data.time)
-  );
-  const snapshot = await getDocs(q);
+  date: string; // yyyy-mm-dd
+  time: string; // e.g. "10:00 AM"
+  status?: string;
+  createdAt?: any;
+}
 
-  if (!snapshot.empty) {
-    throw new Error("That time slot is already booked. Please choose another.");
+export async function getBookedTimes(date: string): Promise<string[]> {
+  try {
+    const q = query(collection(db, "requests"), where("date", "==", date));
+    const snap = await getDocs(q);
+    const times: string[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      if (data.time) times.push(data.time);
+    });
+    return times;
+  } catch (e) {
+    console.error("getBookedTimes", e);
+    return [];
+  }
+}
+
+export async function submitRequest(req: RequestData) {
+  // ensure slot still available (caller should also check)
+  const q = query(
+      collection(db, "requests"),
+      where("date", "==", req.date),
+      where("time", "==", req.time)
+  );
+  const snap = await getDocs(q);
+  if (!snap.empty) {
+    throw new Error(`Slot ${req.date} ${req.time} is already booked.`);
   }
 
-  const docRef = await addDoc(requestsRef, {
-    ...data,
+  await addDoc(collection(db, "requests"), {
+    ...req,
+    status: req.status || "Pending",
     createdAt: Timestamp.now(),
   });
+}
 
-  return docRef.id;
-};
+export async function getUserRequests(userId: string) {
+  const q = query(
+      collection(db, "requests"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  const out: any[] = [];
+  snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+  return out;
+}

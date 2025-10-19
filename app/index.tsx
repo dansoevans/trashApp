@@ -1,10 +1,11 @@
 
 // app/index.tsx
 import React from "react";
-import { View, Text, TouchableOpacity, ImageBackground, StyleSheet, SafeAreaView } from "react-native";
+import { View, Text, TouchableOpacity, ImageBackground, StyleSheet} from "react-native";
+import {SafeAreaView} from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useTheme } from "../theme/ThemeContext";
-import { APP_NAME } from "../constants";
+import { useTheme } from "@/theme/ThemeContext";
+import { APP_NAME } from "@/constants";
 
 export default function Welcome() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function Welcome() {
           Request garbage collection with fair pricing. Quick, reliable pickups.
         </Text>
 
-        <TouchableOpacity style={[styles.cta, { backgroundColor: theme.primary }]} onPress={() => router.push("./auth/signup")}>
+        <TouchableOpacity style={[styles.cta, { backgroundColor: theme.primary }]} onPress={() => router.push("/home")}>
           <Text style={[styles.ctaText]}>Get Started</Text>
         </TouchableOpacity>
       </View>

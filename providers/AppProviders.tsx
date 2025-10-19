@@ -1,7 +1,7 @@
 // providers/AppProviders.tsx
 import React from "react";
 import { View, ActivityIndicator } from "react-native";
-import { ThemeProvider } from "../theme/ThemeContext";
+import { ThemeProvider } from "@/theme/ThemeContext";
 import {
   useFonts,
   WorkSans_400Regular,
