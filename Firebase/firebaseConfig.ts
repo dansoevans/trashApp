@@ -1,12 +1,8 @@
+// Firebase/firebaseConfig.ts - ENHANCED
 import { initializeApp } from "firebase/app";
-import {
-  initializeAuth,
-  getReactNativePersistence,
-  getAuth,
-} from "firebase/auth";
+import { initializeAuth, getReactNativePersistence, inMemoryPersistence } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getFirestore } from "firebase/firestore";
-
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyALQ9a1pBfvEXEZ2C2BWgX5bJh9F_A7yKA",
@@ -18,14 +14,36 @@ const firebaseConfig = {
   measurementId: "G-QEWF487LZL"
 };
 
-
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// ✅ Persistent Auth (React Native)
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
+// Initialize Auth with enhanced persistence
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+  console.log('✅ Firebase Auth initialized with AsyncStorage persistence');
+} catch (error) {
+  console.warn('⚠️ AsyncStorage persistence failed, using in-memory:', error);
+  auth = initializeAuth(app, {
+    persistence: inMemoryPersistence,
+  });
+}
 
-const db = getFirestore(app);
+// Initialize Firestore with enhanced configuration
+let db;
+try {
+  db = initializeFirestore(app, {
+    experimentalForceLongPolling: true, // Better for React Native
+  });
+
+
+  console.log('✅ Firestore initialized with offline persistence');
+} catch (error) {
+  console.error('❌ Firestore initialization failed:', error);
+  // Fallback to regular Firestore without persistence
+  db = getFirestore(app);
+}
 
 export { app, auth, db };

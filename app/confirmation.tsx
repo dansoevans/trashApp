@@ -1,60 +1,229 @@
 // app/confirmation.tsx
-import React from "react";
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useTheme } from "../theme/ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-export default function Confirmation() {
+export default function ConfirmationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const theme = useTheme();
 
-  const address = (params as any).address as string | undefined;
-  const pickupAt = (params as any).pickupAt as string | undefined;
-  const estimated = (params as any).estimated as string | undefined;
+  const scaleAnim = new Animated.Value(0);
+  const fadeAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <View style={styles.container}>
-        <View style={[styles.badge, { backgroundColor: theme.primary }]}>
-          <Text style={{ fontSize: 40, color: theme.card }}>✓</Text>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <Animated.View
+              style={[
+                styles.iconContainer,
+                {
+                  transform: [{ scale: scaleAnim }],
+                  opacity: fadeAnim,
+                },
+              ]}
+          >
+            <LinearGradient
+                colors={["#10B981", "#059669"]}
+                style={styles.gradientCircle}
+            >
+              <Ionicons name="checkmark" size={48} color="#FFFFFF" />
+            </LinearGradient>
+          </Animated.View>
+
+          <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+            <Text style={styles.title}>Pickup Scheduled!</Text>
+            <Text style={styles.subtitle}>
+              Your waste collection has been successfully scheduled
+            </Text>
+
+            <View style={styles.detailsCard}>
+              <DetailRow
+                  icon="calendar"
+                  label="Date"
+                  value={params.date as string}
+              />
+              <DetailRow
+                  icon="time"
+                  label="Time"
+                  value={params.time as string}
+              />
+              <DetailRow
+                  icon="recycle"
+                  label="Waste Type"
+                  value={params.wasteType as string}
+              />
+            </View>
+
+            <Text style={styles.note}>
+              You'll receive a notification reminder before your pickup.
+              You can track the status in your history.
+            </Text>
+          </Animated.View>
+
+          <View style={styles.actions}>
+            <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => router.replace("/(tabs)/home")}
+            >
+              <Text style={styles.primaryButtonText}>Back to Home</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => router.replace("/(tabs)/history")}
+            >
+              <Text style={styles.secondaryButtonText}>View History</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={[styles.title, { color: theme.text }]}>Request Submitted</Text>
-        <Text style={[styles.subtitle, { color: theme.muted }]}>We've sent a confirmation to your phone.</Text>
-
-        {address && (
-          <View style={[styles.summary, { backgroundColor: theme.card }]}>
-            <Text style={{ fontWeight: "700", color: theme.text }}>Address</Text>
-            <Text style={{ color: theme.text }}>{address}</Text>
-          </View>
-        )}
-        {pickupAt && (
-          <View style={[styles.summary, { backgroundColor: theme.card }]}>
-            <Text style={{ fontWeight: "700", color: theme.text }}>Pickup Time</Text>
-            <Text style={{ color: theme.text }}>{new Date(pickupAt).toLocaleString()}</Text>
-          </View>
-        )}
-        {estimated && (
-          <View style={[styles.summary, { backgroundColor: theme.card }]}>
-            <Text style={{ fontWeight: "700", color: theme.text }}>Estimated Cost</Text>
-            <Text style={{ color: theme.text }}>{estimated}</Text>
-          </View>
-        )}
-
-        <TouchableOpacity style={[styles.button, { backgroundColor: theme.primary }]} onPress={() => router.push("/")}>
-          <Text style={{ color: theme.card, fontWeight: "700" }}>Done</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
   );
 }
 
+const DetailRow = ({ icon, label, value }: { icon: string; label: string; value: string }) => (
+    <View style={styles.detailRow}>
+      <View style={styles.detailLeft}>
+        <Ionicons name={icon as any} size={20} color="#6B7280" />
+        <Text style={styles.detailLabel}>{label}</Text>
+      </View>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+);
+
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  container: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  badge: { width: 120, height: 120, borderRadius: 60, alignItems: "center", justifyContent: "center", marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 6 },
-  subtitle: { marginBottom: 18 },
-  summary: { width: "100%", padding: 12, borderRadius: 10, marginBottom: 10 },
-  button: { paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, marginTop: 12 },
+  safe: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  container: {
+    flex: 1,
+    padding: 20,
+    justifyContent: "space-between",
+  },
+  iconContainer: {
+    alignItems: "center",
+    marginTop: 60,
+  },
+  gradientCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#10B981",
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  content: {
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  detailsCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  detailLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  detailLabel: {
+    fontSize: 16,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  detailValue: {
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: "600",
+  },
+  note: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginTop: 24,
+    paddingHorizontal: 20,
+  },
+  actions: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  primaryButton: {
+    backgroundColor: "#10B981",
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  secondaryButtonText: {
+    color: "#6B7280",
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });
