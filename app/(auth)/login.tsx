@@ -8,10 +8,10 @@ import {
     KeyboardAvoidingView,
     Platform,
     Dimensions,
-    SafeAreaView,
     Animated,
     Alert,
 } from "react-native";
+import {SafeAreaView} from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "@/services/authService";
@@ -59,22 +59,18 @@ export default function LoginScreen() {
         router.push("/(auth)/phoneAuth");
     };
 
+    const handleSignUp = () => {
+        router.push("/(auth)/locationPermission");
+    };
+
     const handleDebugLogin = async () => {
         // For testing purposes only - remove in production
         setLoading(true);
         try {
-            // This would normally be your actual login flow
-            // For now, we'll simulate a successful auth state
             console.log('Debug login activated');
-
-            // In a real app, you would call your login function here
-            // await loginUser('test@example.com', 'password');
-
-            // For demo, we'll just navigate to home
             setTimeout(() => {
                 router.replace('/(tabs)/home');
             }, 1000);
-
         } catch (error: any) {
             Alert.alert("Login Failed", error.message || "Unable to sign in.");
         } finally {
@@ -100,11 +96,11 @@ export default function LoginScreen() {
                     {/* Header */}
                     <View style={styles.header}>
                         <View style={styles.logoContainer}>
-                            <Ionicons name="lock-closed" size={32} color="#10B981" />
+                            <Ionicons name="trash-outline" size={32} color="#10B981" />
                         </View>
                         <Text style={styles.title}>Welcome to WasteMaster</Text>
                         <Text style={styles.subtitle}>
-                            Sign in securely with your phone number to manage your waste pickups
+                            Sign in to manage your waste pickups efficiently
                         </Text>
                     </View>
 
@@ -117,21 +113,7 @@ export default function LoginScreen() {
                         </View>
                     </View>
 
-                    {/* Benefits */}
-                    <View style={styles.benefitsContainer}>
-                        <View style={styles.benefitItem}>
-                            <Ionicons name="shield-checkmark" size={20} color="#10B981" />
-                            <Text style={styles.benefitText}>Secure authentication</Text>
-                        </View>
-                        <View style={styles.benefitItem}>
-                            <Ionicons name="flash" size={20} color="#10B981" />
-                            <Text style={styles.benefitText}>Instant verification</Text>
-                        </View>
-                        <View style={styles.benefitItem}>
-                            <Ionicons name="key" size={20} color="#10B981" />
-                            <Text style={styles.benefitText}>Passwordless login</Text>
-                        </View>
-                    </View>
+
 
                     {/* CTA Section */}
                     <View style={styles.ctaContainer}>
@@ -140,24 +122,24 @@ export default function LoginScreen() {
                             onPress={handlePhoneLogin}
                             disabled={loading}
                         >
-                            <Ionicons name="phone-portrait" size={20} color="#fff" />
+                            <Ionicons name="log-in-outline" size={20} color="#fff" />
                             <Text style={styles.primaryButtonText}>
-                                {loading ? "Loading..." : "Continue with Phone"}
+                                {loading ? "Loading..." : "Sign In with Phone"}
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.secondaryButton}
+                            onPress={handleSignUp}
+                            disabled={loading}
+                        >
+                            <Ionicons name="person-add-outline" size={20} color="#10B981" />
+                            <Text style={styles.secondaryButtonText}>
+                                Create New Account
                             </Text>
                         </TouchableOpacity>
 
                         {/* Debug button - remove in production */}
-                        {__DEV__ && (
-                            <TouchableOpacity
-                                style={styles.debugButton}
-                                onPress={handleDebugLogin}
-                                disabled={loading}
-                            >
-                                <Text style={styles.debugButtonText}>
-                                    {loading ? "Logging in..." : "Debug Login (Dev Only)"}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
 
                         <Text style={styles.privacyText}>
                             By continuing, you agree to our{" "}
@@ -267,7 +249,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         borderRadius: 16,
         width: "100%",
-        marginBottom: 16,
+        marginBottom: 12,
         shadowColor: "#10B981",
         shadowOffset: {
             width: 0,
@@ -279,6 +261,25 @@ const styles = StyleSheet.create({
     },
     primaryButtonText: {
         color: "#fff",
+        fontSize: 18,
+        fontWeight: "700",
+        marginLeft: 8,
+    },
+    secondaryButton: {
+        backgroundColor: "#FFFFFF",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 16,
+        width: "100%",
+        marginBottom: 16,
+        borderWidth: 2,
+        borderColor: "#10B981",
+    },
+    secondaryButtonText: {
+        color: "#10B981",
         fontSize: 18,
         fontWeight: "700",
         marginLeft: 8,

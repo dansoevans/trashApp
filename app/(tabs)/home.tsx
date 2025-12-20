@@ -29,7 +29,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [requests, setRequests] = useState<PickupRequest[]>([]);
-
+  const [unreadCount, setUnreadCount] = useState(0);
   const loadData = useCallback(async () => {
     try {
       const user = auth.currentUser;
@@ -58,6 +58,9 @@ export default function HomeScreen() {
       setLoading(false);
     }
   }, []);
+
+
+
 
   useFocusEffect(
       useCallback(() => {
@@ -154,7 +157,16 @@ export default function HomeScreen() {
                   style={styles.iconButton}
                   onPress={() => router.push("/(tabs)/notifications")}
               >
-                <Ionicons name="notifications-outline" size={24} color="#374151" />
+                <View style={styles.notificationIconContainer}>
+                  <Ionicons name="notifications-outline" size={24} color="#374151" />
+                  {unreadCount > 0 && (
+                      <View style={styles.notificationBadge}>
+                        <Text style={styles.notificationBadgeText}>
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </Text>
+                      </View>
+                  )}
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
                   style={styles.iconButton}
@@ -667,5 +679,25 @@ const styles = StyleSheet.create({
   },
   spacer: {
     height: 20,
+  },
+  notificationIconContainer: {
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

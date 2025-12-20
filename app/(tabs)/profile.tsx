@@ -307,8 +307,8 @@ export default function ProfileScreen() {
 
                 {/* App Info */}
                 <View style={styles.appInfo}>
-                    <Text style={styles.appVersion}>WasteMaster v1.0.0</Text>
-                    <Text style={styles.appCopyright}>© 2024 WasteMaster Inc.</Text>
+                    <Text style={styles.appVersion}>TrashApp v1.0.0</Text>
+                    <Text style={styles.appCopyright}>© 2024 TrashApp Inc.</Text>
                 </View>
 
                 {/* Logout Button */}

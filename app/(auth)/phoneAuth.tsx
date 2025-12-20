@@ -1,4 +1,4 @@
-// app/(auth)/phoneAuth.tsx
+// app/(auth)/phoneAuth.tsx - UPDATED FOR SIGN UP FLOW
 import React, { useRef, useState } from "react";
 import {
     View,
@@ -11,17 +11,16 @@ import {
     KeyboardAvoidingView,
     Platform,
     Dimensions,
-
     Animated,
     Modal,
     FlatList,
     TextInput as RNTextInput,
 } from "react-native";
-import {SafeAreaView} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha";
 import { auth, app } from "@/Firebase/firebaseConfig";
-import { signInWithPhoneNumber } from "firebase/auth";
-import { useRouter } from "expo-router";
+import { signInWithPhoneNumber, PhoneAuthProvider } from "firebase/auth";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
@@ -32,16 +31,26 @@ const COUNTRIES = [
     { code: "GB", name: "United Kingdom", dialCode: "+44", flag: "🇬🇧" },
     { code: "CA", name: "Canada", dialCode: "+1", flag: "🇨🇦" },
     { code: "GH", name: "Ghana", dialCode: "+233", flag: "🇬🇭" },
-
 ];
 
 export default function PhoneAuthScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams();
+
+    // Get user data from sign-up flow
+    const firstName = (params.firstName as string) || "";
+    const lastName = (params.lastName as string) || "";
+    const phoneFromPrev = (params.phone as string) || "";
+    const address = (params.address as string) || "";
+    const lat = (params.lat as string) || "";
+    const lng = (params.lng as string) || "";
+    const isSignUp = (params.isSignUp as string) === "true";
+
     const recaptchaVerifier = useRef<any>(null);
     const phoneInputRef = useRef<RNTextInput>(null);
 
     const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
-    const [phoneNumber, setPhoneNumber] = useState("");
+    const [phoneNumber, setPhoneNumber] = useState(phoneFromPrev || "");
     const [sending, setSending] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
     const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -91,7 +100,6 @@ export default function PhoneAuthScreen() {
         setSelectedCountry(country);
         setShowCountryPicker(false);
         setSearchQuery("");
-        // Focus phone input after country selection
         setTimeout(() => phoneInputRef.current?.focus(), 100);
     };
 
@@ -111,12 +119,25 @@ export default function PhoneAuthScreen() {
             setSending(true);
             const result = await signInWithPhoneNumber(auth, fullPhoneNumber, recaptchaVerifier.current);
 
+            // Prepare navigation params
+            const navParams: any = {
+                phone: fullPhoneNumber,
+                verificationId: result.verificationId,
+            };
+
+            // Add sign-up data if this is a sign-up flow
+            if (isSignUp) {
+                navParams.firstName = firstName;
+                navParams.lastName = lastName;
+                navParams.address = address;
+                navParams.lat = lat;
+                navParams.lng = lng;
+                navParams.isSignUp = "true";
+            }
+
             router.push({
                 pathname: "/(auth)/verifyPhone",
-                params: {
-                    phone: fullPhoneNumber,
-                    verificationId: result.verificationId,
-                },
+                params: navParams,
             });
         } catch (error: any) {
             console.error("SMS send error:", error);
@@ -216,7 +237,9 @@ export default function PhoneAuthScreen() {
                     >
                         <Ionicons name="chevron-back" size={24} color="#0f172a" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Phone Verification</Text>
+                    <Text style={styles.headerTitle}>
+                        {isSignUp ? "Verify Your Phone" : "Phone Verification"}
+                    </Text>
                 </View>
 
                 <Animated.View
@@ -231,16 +254,21 @@ export default function PhoneAuthScreen() {
                     {/* Illustration */}
                     <View style={styles.illustration}>
                         <View style={styles.phoneIconContainer}>
-                            <Ionicons name="globe" size={48} color="#16a34a" />
+                            <Ionicons name="phone-portrait" size={48} color="#16a34a" />
                             <View style={styles.wave} />
                         </View>
                     </View>
 
                     {/* Title & Description */}
                     <View style={styles.textContainer}>
-                        <Text style={styles.title}>Enter Your Phone Number</Text>
+                        <Text style={styles.title}>
+                            {isSignUp ? "Almost There!" : "Enter Your Phone Number"}
+                        </Text>
                         <Text style={styles.subtitle}>
-                            We'll send a verification code to your phone number to secure your account
+                            {isSignUp
+                                ? "We'll send a verification code to secure your new account"
+                                : "We'll send a verification code to your phone number to sign in"
+                            }
                         </Text>
                     </View>
 
@@ -296,11 +324,12 @@ export default function PhoneAuthScreen() {
                         ) : (
                             <>
                                 <Ionicons name="send" size={18} color="#fff" />
-                                <Text style={styles.primaryButtonText}>Send Verification Code</Text>
+                                <Text style={styles.primaryButtonText}>
+                                    {isSignUp ? "Create Account" : "Send Verification Code"}
+                                </Text>
                             </>
                         )}
                     </TouchableOpacity>
-
 
                     {/* Security Note */}
                     <View style={styles.securityNote}>
@@ -314,6 +343,8 @@ export default function PhoneAuthScreen() {
         </SafeAreaView>
     );
 }
+
+// ... styles remain the same as previous version ...
 
 const styles = StyleSheet.create({
     container: {

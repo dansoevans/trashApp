@@ -1,4 +1,4 @@
-// app/(tabs)/requestDetails.tsx
+// app/(tabs)/requestDetails.tsx - COMPLETE FIXED VERSION
 import React, { useEffect, useState, useCallback } from "react";
 import {
     View,
@@ -13,11 +13,11 @@ import {
     Animated,
     RefreshControl,
     Modal,
+    Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Calendar } from "react-native-calendars";
 import { auth, db } from "@/Firebase/firebaseConfig";
 import {
     getRequestById,
@@ -28,10 +28,12 @@ import {
     canEditRequest,
     rescheduleRequest
 } from "@/services/requestService";
-import { sendLocalNotification } from "@/services/notificationService";
+import { sendLocalNotification, sendPickupStatusUpdate } from "@/services/notificationService";
 import { PickupRequest, WasteType, RequestStatus } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
+import { Calendar } from "react-native-calendars";
 
+const { width, height } = Dimensions.get("window");
 const TIME_START = 8;
 const TIME_END = 18;
 
@@ -54,8 +56,8 @@ export default function RequestDetailsScreen() {
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [showRescheduleConfirm, setShowRescheduleConfirm] = useState(false);
 
-    const fadeAnim = new Animated.Value(0);
-    const slideAnim = new Animated.Value(20);
+    const fadeAnim = useState(new Animated.Value(0))[0];
+    const slideAnim = useState(new Animated.Value(20))[0];
 
     const loadRequest = useCallback(async () => {
         if (!id) {
@@ -66,6 +68,7 @@ export default function RequestDetailsScreen() {
 
         try {
             setLoading(true);
+            console.log('Loading request with ID:', id);
             const requestData = await getRequestById(id);
 
             if (!requestData) {
@@ -74,6 +77,7 @@ export default function RequestDetailsScreen() {
                 return;
             }
 
+            console.log('Request loaded:', requestData);
             setRequest(requestData);
 
             // Initialize editing state with current values
@@ -96,7 +100,6 @@ export default function RequestDetailsScreen() {
         } catch (error) {
             console.error("Error loading request:", error);
             Alert.alert("Error", "Failed to load request details. Please try again.");
-            router.back();
         } finally {
             setLoading(false);
         }
@@ -134,13 +137,13 @@ export default function RequestDetailsScreen() {
 
     const getStatusColor = (status: RequestStatus): string => {
         const statusColors: Record<RequestStatus, string> = {
-            Pending: "#F59E0B",
-            Assigned: "#3B82F6",
-            InProgress: "#8B5CF6",
-            Completed: "#10B981",
-            Cancelled: "#EF4444",
+            Pending: "#f59e0b",
+            Assigned: "#3b82f6",
+            InProgress: "#8b5cf6",
+            Completed: "#16a34a",
+            Cancelled: "#ef4444",
         };
-        return statusColors[status];
+        return statusColors[status] || "#6b7280";
     };
 
     const getStatusIcon = (status: RequestStatus): keyof typeof Ionicons.glyphMap => {
@@ -268,7 +271,7 @@ export default function RequestDetailsScreen() {
         return (
             <SafeAreaView style={styles.safe}>
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#10B981" />
+                    <ActivityIndicator size="large" color="#16a34a" />
                     <Text style={styles.loadingText}>Loading pickup details...</Text>
                 </View>
             </SafeAreaView>
@@ -304,8 +307,8 @@ export default function RequestDetailsScreen() {
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={onRefresh}
-                            colors={["#10B981"]}
-                            tintColor="#10B981"
+                            colors={["#16a34a"]}
+                            tintColor="#16a34a"
                         />
                     }
                 >
@@ -325,7 +328,7 @@ export default function RequestDetailsScreen() {
                     {/* Status Card */}
                     <View style={styles.statusCard}>
                         <LinearGradient
-                            colors={["#10B981", "#059669"]}
+                            colors={["#16a34a", "#15803d"]}
                             style={styles.statusGradient}
                         >
                             <View style={styles.statusContent}>
@@ -419,7 +422,10 @@ export default function RequestDetailsScreen() {
                             <InfoRow
                                 icon="calendar"
                                 label="Submitted On"
-                                value={new Date(request.createdAt.toDate()).toLocaleDateString()}
+                                value={request.createdAt.toDate ?
+                                    request.createdAt.toDate().toLocaleDateString() :
+                                    new Date(request.createdAt).toLocaleDateString()
+                                }
                             />
                         )}
                     </View>
@@ -438,7 +444,7 @@ export default function RequestDetailsScreen() {
                                         markedDates={{
                                             [newDate]: {
                                                 selected: true,
-                                                selectedColor: "#10B981",
+                                                selectedColor: "#16a34a",
                                                 selectedTextColor: "#FFFFFF",
                                             },
                                         }}
@@ -447,12 +453,12 @@ export default function RequestDetailsScreen() {
                                             backgroundColor: "#FFFFFF",
                                             calendarBackground: "#FFFFFF",
                                             textSectionTitleColor: "#6B7280",
-                                            selectedDayBackgroundColor: "#10B981",
+                                            selectedDayBackgroundColor: "#16a34a",
                                             selectedDayTextColor: "#FFFFFF",
-                                            todayTextColor: "#10B981",
+                                            todayTextColor: "#16a34a",
                                             dayTextColor: "#111827",
                                             textDisabledColor: "#D1D5DB",
-                                            arrowColor: "#10B981",
+                                            arrowColor: "#16a34a",
                                             monthTextColor: "#111827",
                                         }}
                                     />
@@ -465,7 +471,7 @@ export default function RequestDetailsScreen() {
                                     <View style={styles.timeHeader}>
                                         <Text style={styles.editLabel}>Select Time Slot</Text>
                                         {loadingSlots && (
-                                            <ActivityIndicator size="small" color="#10B981" />
+                                            <ActivityIndicator size="small" color="#16a34a" />
                                         )}
                                     </View>
 
@@ -492,7 +498,7 @@ export default function RequestDetailsScreen() {
                                                             <Ionicons
                                                                 name={isCurrentSlot ? "information-circle" : "close-circle"}
                                                                 size={16}
-                                                                color={isCurrentSlot ? "#10B981" : "#9CA3AF"}
+                                                                color={isCurrentSlot ? "#16a34a" : "#9CA3AF"}
                                                             />
                                                             <Text style={[
                                                                 styles.timeSlotText,
@@ -585,7 +591,7 @@ export default function RequestDetailsScreen() {
                                     style={styles.tertiaryAction}
                                     onPress={() => router.push("/(tabs)/request")}
                                 >
-                                    <Ionicons name="add-circle" size={20} color="#10B981" />
+                                    <Ionicons name="add-circle" size={20} color="#16a34a" />
                                     <Text style={styles.tertiaryActionText}>Schedule New Pickup</Text>
                                 </TouchableOpacity>
                             )}
@@ -772,7 +778,7 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     backButton: {
-        backgroundColor: "#10B981",
+        backgroundColor: "#16a34a",
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 8,
@@ -788,6 +794,9 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         paddingHorizontal: 20,
         paddingVertical: 16,
+        backgroundColor: "#FFFFFF",
+        borderBottomWidth: 1,
+        borderBottomColor: "#f1f5f9",
     },
     headerTitle: {
         fontSize: 18,
@@ -799,7 +808,7 @@ const styles = StyleSheet.create({
     },
     statusCard: {
         marginHorizontal: 20,
-        marginBottom: 20,
+        marginVertical: 16,
         borderRadius: 16,
         overflow: "hidden",
         shadowColor: "#000",
@@ -848,6 +857,14 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: "#E5E7EB",
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
     },
     sectionTitle: {
         fontSize: 18,
@@ -934,11 +951,11 @@ const styles = StyleSheet.create({
         borderColor: "#F3F4F6",
     },
     timeSlotSelected: {
-        backgroundColor: "#10B981",
-        borderColor: "#10B981",
+        backgroundColor: "#16a34a",
+        borderColor: "#16a34a",
     },
     timeSlotCurrent: {
-        borderColor: "#10B981",
+        borderColor: "#16a34a",
         backgroundColor: "#F0FDF4",
     },
     timeSlotText: {
@@ -955,7 +972,7 @@ const styles = StyleSheet.create({
         textDecorationLine: "line-through",
     },
     timeSlotTextCurrent: {
-        color: "#10B981",
+        color: "#16a34a",
     },
     bookedLabel: {
         fontSize: 10,
@@ -982,7 +999,7 @@ const styles = StyleSheet.create({
     },
     confirmEditButton: {
         flex: 2,
-        backgroundColor: "#10B981",
+        backgroundColor: "#16a34a",
         paddingVertical: 14,
         borderRadius: 12,
         alignItems: "center",
@@ -1009,7 +1026,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#10B981",
+        backgroundColor: "#16a34a",
         paddingVertical: 16,
         borderRadius: 12,
         gap: 8,
@@ -1043,13 +1060,13 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: "#10B981",
+        borderColor: "#16a34a",
         gap: 8,
     },
     tertiaryActionText: {
         fontSize: 16,
         fontWeight: "600",
-        color: "#10B981",
+        color: "#16a34a",
     },
     spacer: {
         height: 20,
@@ -1140,7 +1157,7 @@ const styles = StyleSheet.create({
     },
     modalConfirm: {
         flex: 1,
-        backgroundColor: "#10B981",
+        backgroundColor: "#16a34a",
         paddingVertical: 14,
         borderRadius: 12,
         alignItems: "center",

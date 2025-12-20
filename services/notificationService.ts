@@ -1,17 +1,42 @@
-// services/notificationService.ts
+// services/notificationService.ts - COMPLETE FIXED VERSION
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { Alert } from 'react-native';
+import { db } from "@/Firebase/firebaseConfig";
+import {
+    collection,
+    addDoc,
+    query,
+    where,
+    getDocs,
+    orderBy,
+    updateDoc,
+    doc,
+    onSnapshot,
+    serverTimestamp
+} from "firebase/firestore";
+import { auth } from "@/Firebase/firebaseConfig";
 
 // Configure notification handler
-
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
-        shouldShowAlert: true,
+        shouldShowBanner: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
     }),
 });
+
+// Types for notification data
+export interface AppNotification {
+    id: string;
+    title: string;
+    body: string;
+    type: 'pickup' | 'reminder' | 'status' | 'system' | 'promo';
+    read: boolean;
+    data?: any;
+    createdAt: any;
+    userId?: string;
+}
 
 export async function setupNotifications(): Promise<boolean> {
     try {
@@ -23,7 +48,7 @@ export async function setupNotifications(): Promise<boolean> {
                 name: 'Default',
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#10B981',
+                lightColor: '#16a34a',
                 sound: 'default',
                 enableVibrate: true,
                 enableLights: true,
@@ -37,7 +62,6 @@ export async function setupNotifications(): Promise<boolean> {
 
         // Request permissions if not granted
         if (existingStatus !== 'granted') {
-
             const { status } = await Notifications.requestPermissionsAsync({
                 ios: {
                     allowAlert: true,
@@ -54,16 +78,12 @@ export async function setupNotifications(): Promise<boolean> {
             return false;
         }
 
-        // Get Expo push token (for future push notifications)
+        // Get Expo push token
         try {
             const token = (await Notifications.getExpoPushTokenAsync()).data;
             console.log('Expo push token:', token);
-
-            // Here you would typically send this token to your backend
-            // await savePushTokenToBackend(token);
         } catch (tokenError) {
             console.warn('Failed to get Expo push token:', tokenError);
-            // Continue without push token - local notifications will still work
         }
 
         console.log('Notifications setup completed successfully');
@@ -82,7 +102,6 @@ export async function askNotificationPermission(): Promise<boolean> {
             return true;
         }
 
-        // Request permissions with detailed options
         const { status } = await Notifications.requestPermissionsAsync({
             ios: {
                 allowAlert: true,
@@ -96,7 +115,6 @@ export async function askNotificationPermission(): Promise<boolean> {
 
         if (granted) {
             console.log('Notification permission granted');
-            // Re-run setup to configure channels
             await setupNotifications();
         } else {
             console.warn('Notification permission denied');
@@ -115,7 +133,6 @@ export async function sendLocalNotification(
     data?: any
 ): Promise<void> {
     try {
-        // Check if we have permission
         const { status } = await Notifications.getPermissionsAsync();
         if (status !== 'granted') {
             console.warn('Cannot send notification - permission not granted');
@@ -132,7 +149,7 @@ export async function sendLocalNotification(
                 autoDismiss: true,
                 sticky: false,
             },
-            trigger: null, // Send immediately
+            trigger: null,
         });
 
         console.log('Local notification sent:', title);
@@ -144,7 +161,7 @@ export async function sendLocalNotification(
 export async function sendScheduledNotification(
     title: string,
     body: string,
-    trigger: { date: Date },
+    trigger: Notifications.NotificationTriggerInput,
     data?: any
 ): Promise<void> {
     try {
@@ -171,6 +188,171 @@ export async function sendScheduledNotification(
     }
 }
 
+// Save notification to Firestore
+export async function saveNotificationToFirestore(notification: Omit<AppNotification, 'id'>): Promise<void> {
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            console.warn('No user logged in, skipping notification save');
+            return;
+        }
+
+        await addDoc(collection(db, "notifications"), {
+            ...notification,
+            userId: user.uid,
+            createdAt: serverTimestamp(),
+        });
+        console.log('Notification saved to Firestore');
+    } catch (error) {
+        console.error('Error saving notification to Firestore:', error);
+    }
+}
+
+// Get user notifications from Firestore
+export async function getUserNotifications(): Promise<AppNotification[]> {
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            console.warn('No user logged in');
+            return [];
+        }
+
+        const q = query(
+            collection(db, "notifications"),
+            where("userId", "==", user.uid),
+            orderBy("createdAt", "desc")
+        );
+
+        const querySnapshot = await getDocs(q);
+        const notifications: AppNotification[] = [];
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            notifications.push({
+                id: doc.id,
+                title: data.title || 'Notification',
+                body: data.body || '',
+                type: data.type || 'system',
+                read: data.read || false,
+                data: data.data || {},
+                createdAt: data.createdAt,
+                userId: data.userId,
+            });
+        });
+
+        console.log(`Loaded ${notifications.length} notifications`);
+        return notifications;
+    } catch (error) {
+        console.error('Error getting user notifications:', error);
+        return [];
+    }
+}
+
+// Mark notification as read
+export async function markNotificationAsRead(notificationId: string): Promise<void> {
+    try {
+        const notificationRef = doc(db, "notifications", notificationId);
+        await updateDoc(notificationRef, {
+            read: true,
+        });
+        console.log('Notification marked as read:', notificationId);
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+        throw error;
+    }
+}
+
+// Mark all notifications as read
+export async function markAllNotificationsAsRead(): Promise<void> {
+    try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const q = query(
+            collection(db, "notifications"),
+            where("userId", "==", user.uid),
+            where("read", "==", false)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const updatePromises = querySnapshot.docs.map(doc =>
+            updateDoc(doc.ref, { read: true })
+        );
+
+        await Promise.all(updatePromises);
+        console.log(`Marked ${updatePromises.length} notifications as read`);
+    } catch (error) {
+        console.error('Error marking all notifications as read:', error);
+        throw error;
+    }
+}
+
+// Get unread notification count
+export async function getUnreadNotificationCount(): Promise<number> {
+    try {
+        const user = auth.currentUser;
+        if (!user) return 0;
+
+        const q = query(
+            collection(db, "notifications"),
+            where("userId", "==", user.uid),
+            where("read", "==", false)
+        );
+
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.size;
+    } catch (error) {
+        console.error('Error getting unread count:', error);
+        return 0;
+    }
+}
+
+// Real-time notifications listener
+export function subscribeToNotifications(
+    callback: (notifications: AppNotification[]) => void
+): () => void {
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            console.warn('No user logged in for notifications subscription');
+            return () => {};
+        }
+
+        const q = query(
+            collection(db, "notifications"),
+            where("userId", "==", user.uid),
+            orderBy("createdAt", "desc")
+        );
+
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const notifications: AppNotification[] = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                notifications.push({
+                    id: doc.id,
+                    title: data.title || 'Notification',
+                    body: data.body || '',
+                    type: data.type || 'system',
+                    read: data.read || false,
+                    data: data.data || {},
+                    createdAt: data.createdAt,
+                    userId: data.userId,
+                });
+            });
+            console.log('Real-time notifications update:', notifications.length);
+            callback(notifications);
+        }, (error) => {
+            console.error('Error in notifications subscription:', error);
+        });
+
+        return unsubscribe;
+    } catch (error) {
+        console.error('Error setting up notifications subscription:', error);
+        return () => {};
+    }
+}
+
+// Enhanced notification functions with Firestore saving
 export async function sendPickupReminder(
     pickupDate: string,
     pickupTime: string,
@@ -179,16 +361,22 @@ export async function sendPickupReminder(
 ): Promise<void> {
     try {
         const notificationDate = new Date(`${pickupDate}T${pickupTime}`);
-        // Schedule reminder 1 hour before pickup
         notificationDate.setHours(notificationDate.getHours() - 1);
 
-        // Check if the reminder is in the future
         if (notificationDate <= new Date()) {
-            console.warn('Pickup reminder time is in the past, sending immediate notification instead');
             await sendLocalNotification(
                 'Pickup Reminder',
                 `Your ${wasteType} pickup is scheduled for today at ${pickupTime}. Address: ${address}`
             );
+
+            await saveNotificationToFirestore({
+                title: 'Pickup Reminder',
+                body: `Your ${wasteType} pickup is scheduled for today at ${pickupTime}`,
+                type: 'reminder',
+                read: false,
+                data: { pickupDate, pickupTime, address, wasteType },
+                createdAt: new Date(),
+            });
             return;
         }
 
@@ -204,9 +392,17 @@ export async function sendPickupReminder(
                 wasteType,
             }
         );
+
+        await saveNotificationToFirestore({
+            title: 'Pickup Reminder ⏰',
+            body: `Your ${wasteType} pickup is scheduled for ${pickupTime} today`,
+            type: 'reminder',
+            read: false,
+            data: { pickupDate, pickupTime, address, wasteType },
+            createdAt: new Date(),
+        });
     } catch (error) {
         console.warn('Error scheduling pickup reminder:', error);
-        // Fallback to immediate notification
         await sendLocalNotification(
             'Pickup Scheduled',
             `Your ${wasteType} pickup is scheduled for ${pickupDate} at ${pickupTime}`
@@ -229,12 +425,22 @@ export async function sendPickupConfirmation(
             wasteType,
         }
     );
+
+    await saveNotificationToFirestore({
+        title: 'Pickup Confirmed! ✅',
+        body: `Your ${wasteType} waste pickup has been scheduled for ${pickupDate} at ${pickupTime}`,
+        type: 'pickup',
+        read: false,
+        data: { pickupDate, pickupTime, wasteType },
+        createdAt: new Date(),
+    });
 }
 
 export async function sendPickupStatusUpdate(
     status: string,
     pickupDate: string,
-    pickupTime: string
+    pickupTime: string,
+    wasteType?: string
 ): Promise<void> {
     let title = '';
     let body = '';
@@ -266,6 +472,15 @@ export async function sendPickupStatusUpdate(
         status,
         pickupDate,
         pickupTime,
+    });
+
+    await saveNotificationToFirestore({
+        title,
+        body,
+        type: 'status',
+        read: false,
+        data: { status, pickupDate, pickupTime, wasteType },
+        createdAt: new Date(),
     });
 }
 

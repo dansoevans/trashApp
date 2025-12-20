@@ -1,4 +1,4 @@
-// app/(auth)/verifyPhone.tsx
+// app/(auth)/verifyPhone.tsx - UPDATED FOR USER CREATION
 import React, { useState, useRef, useEffect } from "react";
 import {
     View,
@@ -16,8 +16,9 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
-import { auth } from "@/Firebase/firebaseConfig";
+import { auth, db } from "@/Firebase/firebaseConfig";
 import { ensureUserDoc } from "@/services/authService";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
@@ -26,8 +27,17 @@ const CODE_LENGTH = 6;
 export default function VerifyPhoneScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
+
     const verificationId = (params.verificationId as string) || "";
     const phone = (params.phone as string) || "";
+
+    // Sign-up data
+    const firstName = (params.firstName as string) || "";
+    const lastName = (params.lastName as string) || "";
+    const address = (params.address as string) || "";
+    const lat = (params.lat as string) || "";
+    const lng = (params.lng as string) || "";
+    const isSignUp = (params.isSignUp as string) === "true";
 
     const [code, setCode] = useState("");
     const [verifying, setVerifying] = useState(false);
@@ -67,6 +77,31 @@ export default function VerifyPhoneScreen() {
         }
     }, [code]);
 
+    const createUserProfile = async (user: any) => {
+        try {
+            const userData = {
+                uid: user.uid,
+                name: `${firstName} ${lastName}`.trim(),
+                email: user.email || "",
+                phone: phone,
+                address: address,
+                location: lat && lng ? {
+                    latitude: parseFloat(lat),
+                    longitude: parseFloat(lng)
+                } : null,
+                type: "user",
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            };
+
+            await setDoc(doc(db, "users", user.uid), userData);
+            console.log("User profile created successfully");
+        } catch (error) {
+            console.error("Error creating user profile:", error);
+            throw new Error("Failed to create user profile");
+        }
+    };
+
     const handleVerify = async () => {
         if (!code || code.length < CODE_LENGTH) {
             Alert.alert(
@@ -83,7 +118,13 @@ export default function VerifyPhoneScreen() {
             const userCred = await signInWithCredential(auth, credential);
             const user = userCred.user;
 
-            await ensureUserDoc(user, { phone });
+            if (isSignUp) {
+                // Create user profile for new sign-ups
+                await createUserProfile(user);
+            } else {
+                // Ensure user document exists for sign-ins
+                await ensureUserDoc(user, { phone });
+            }
 
             // Success - navigate to home
             router.replace("/(tabs)/home");
@@ -105,7 +146,8 @@ export default function VerifyPhoneScreen() {
     const handleResendCode = async () => {
         setResendLoading(true);
         try {
-            // Simulate API call
+            // In a real app, you would call your backend to resend the code
+            // For now, we'll simulate the API call
             await new Promise(resolve => setTimeout(resolve, 1500));
             setCountdown(30);
             setCode(""); // Clear existing code
@@ -174,7 +216,9 @@ export default function VerifyPhoneScreen() {
                     >
                         <Ionicons name="chevron-back" size={24} color="#0f172a" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Verify Phone</Text>
+                    <Text style={styles.headerTitle}>
+                        {isSignUp ? "Create Account" : "Verify Phone"}
+                    </Text>
                     <View style={styles.headerSpacer} />
                 </View>
 
@@ -205,6 +249,11 @@ export default function VerifyPhoneScreen() {
                         <Text style={styles.phoneNumber}>
                             {formatPhoneNumber(phone)}
                         </Text>
+                        {isSignUp && (
+                            <Text style={styles.headerTitle}>
+                                Welcome, {firstName}!
+                            </Text>
+                        )}
                     </View>
 
                     {/* Code Input Section */}
@@ -256,7 +305,7 @@ export default function VerifyPhoneScreen() {
                                 <>
                                     <Ionicons name="checkmark-circle" size={20} color="#fff" />
                                     <Text style={styles.verifyButtonText}>
-                                        Verify & Continue
+                                        {isSignUp ? "Create Account" : "Verify & Continue"}
                                     </Text>
                                 </>
                             )}
@@ -294,6 +343,8 @@ export default function VerifyPhoneScreen() {
         </SafeAreaView>
     );
 }
+
+// ... styles remain the same as previous version ...
 
 const styles = StyleSheet.create({
     container: {
