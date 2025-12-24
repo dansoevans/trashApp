@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "garbagesystem",
-    "slug": "garbagesystem",
+    "slug": "trashapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -53,7 +53,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7b19f52c-fe2e-4a22-bc4f-36d31dfbb1d8"
+        "projectId": "8fc01c31-7d9c-4ab0-aa1c-d21dd7fb0446"
       }
     },
     "owner": "evansdev"
